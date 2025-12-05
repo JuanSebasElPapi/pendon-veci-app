@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Veci: Sé un Pionero</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.rawgit.com/davidshimjs/qrcodejs/gh-pages/qrcode.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-50 flex items-center justify-center min-h-screen p-4">
+    <div class="max-w-md w-full bg-white p-8 rounded-2xl shadow-2xl border-t-4 border-purple-600 space-y-6">
+        <header class="text-center">
+            <h1 class="text-3xl font-extrabold text-purple-800">¡Sé un Socio Fundador Veci!</h1>
+            <p class="text-gray-500 mt-2">Logística Justa para Comerciantes (Marta) y Mensajeros (Kevin).</p>
+        </header>
+
+        <p class="text-gray-700 text-lg">Únete a la primera reunión exclusiva y asegura tu puesto en la red de reparto más eficiente y humana de Usaquén.</p>
+        
+        <!-- Contenedor para el QR de prueba (No es el QR Final para Imprimir) -->
+        <div id="qrcode3" class="flex justify-center my-4"></div>
+
+        <form id="reclutamientoForm" class="space-y-4">
+            <div>
+                <label for="rol" class="block text-sm font-medium text-gray-700">Mi interés es como:</label>
+                <select id="rol" name="rol" required class="mt-1 block w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-purple-500 focus:border-purple-500">
+                    <option value="">-- Selecciona tu Rol --</option>
+                    <option value="Comerciante">Comerciante Local (Para afiliar mi negocio)</option>
+                    <option value="Mensajero">Mensajero Veci (Para trabajar en la Ruta Veci)</option>
+                </select>
+            </div>
+            <div>
+                <label for="nombre" class="block text-sm font-medium text-gray-700">Nombre Completo / Nombre del Negocio</label>
+                <input type="text" id="nombre" name="nombre" required class="mt-1 block w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-purple-500 focus:border-purple-500">
+            </div>
+            <div>
+                <label for="telefono" class="block text-sm font-medium text-gray-700">Número de WhatsApp (Contacto Inmediato)</label>
+                <input type="tel" id="telefono" name="telefono" required class="mt-1 block w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-purple-500 focus:border-purple-500">
+            </div>
+            
+            <button type="submit" class="w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl shadow-lg transition duration-150 transform hover:scale-[1.01]">
+                Reservar mi Cupo Exclusivo
+            </button>
+        </form>
+
+        <div id="mensaje3" class="hidden text-center p-3 rounded-lg bg-green-100 text-green-700 font-semibold">
+            ¡Cupo asegurado! Te contactaremos vía WhatsApp para confirmar los detalles de la reunión.
+        </div>
+    </div>
+
+    <script>
+        // ESTE QR ES SOLO PARA PRUEBA INTERNA Y APUNTA A ESTA MISMA PÁGINA.
+        // Reemplaza "URL_REAL_Q3" con la URL de hosting de este archivo (Paso 2) para generar el QR de imprenta.
+        const placeholderUrl = "URL_REAL_Q3"; 
+        new QRCode(document.getElementById("qrcode3"), {
+            text: placeholderUrl,
+            width: 128,
+            height: 128,
+            colorDark: "#7C3AED",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.H
+        });
+
+        document.getElementById('reclutamientoForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            console.log("DATOS RECOPILADOS - SOCIOS PIONEROS:", {
+                rol: document.getElementById('rol').value,
+                nombre: document.getElementById('nombre').value,
+                telefono: document.getElementById('telefono').value,
+                timestamp: new Date().toISOString()
+            });
+            document.getElementById('reclutamientoForm').style.display = 'none';
+            document.getElementById('mensaje3').classList.remove('hidden');
+        });
+    </script>
+</body>
+</html>
