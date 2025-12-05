@@ -9,6 +9,7 @@
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
         .card { background-color: white; border-radius: 0.75rem; padding: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06); }
+        .config-warning { background-color: #fef2f2; border: 2px solid #ef4444; color: #b91c1c; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1.5rem; font-weight: 600; }
     </style>
 </head>
 <body class="p-4 sm:p-8">
@@ -18,6 +19,11 @@
             <h1 class="text-3xl sm:text-4xl font-extrabold text-indigo-800">Panel de Control Veci App</h1>
             <p class="text-gray-600 mt-1">Datos recolectados del Mapeo de Necesidades (Q1)</p>
         </header>
+
+        <div id="config-alert" class="config-warning hidden">
+            <p class="text-xl">⚠️ ¡ATENCIÓN! CONFIGURACIÓN PENDIENTE ⚠️</p>
+            <p class="mt-2">El Panel no puede cargar datos porque **no se han insertado las claves de Firebase**. Por favor, edita este archivo e inserta tu configuración real de Firebase en la sección `MY_FIREBASE_CONFIG` y `MY_APP_ID`.</p>
+        </div>
 
         <div class="card mb-8">
             <h2 class="text-xl font-bold text-gray-800 mb-4">Estado de Conexión</h2>
@@ -39,17 +45,34 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, query, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
-        // Habilita el log de depuración (útil para Canvas)
+        // Habilita el log de depuración (útil para Canvas y navegador)
         setLogLevel('Debug');
 
-        // Variables Globales (Proporcionadas por el entorno de Canvas)
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        // =========================================================================
+        // !!! ATENCIÓN: DEBES REEMPLAZAR ESTA SECCIÓN CON TUS VALORES REALES !!!
+        // Reemplaza esta configuración con la que obtuviste de tu consola de Firebase.
+        
+        // 1. Reemplaza este objeto con la configuración (firebaseConfig) de tu consola:
+        const MY_FIREBASE_CONFIG = {
+            apiKey: "TU_API_KEY_AQUI", // Ejemplo: "AIzaSy..."
+            authDomain: "TU_AUTH_DOMAIN_AQUI", // Ejemplo: "tu-proyecto.firebaseapp.com"
+            projectId: "TU_PROJECT_ID_AQUI", // Ejemplo: "tu-proyecto-id"
+            storageBucket: "TU_STORAGE_BUCKET_AQUI", // Ejemplo: "tu-proyecto.appspot.com"
+            messagingSenderId: "TU_MESSAGING_SENDER_ID_AQUI", // Ejemplo: "1234567890"
+            appId: "TU_APP_ID_AQUI" // Ejemplo: "1:1234567890:web:abcdefgh..."
+        };
+        
+        // 2. Define tu App ID (usa el projectId de Firebase si no tienes un App ID específico de Canvas)
+        const MY_APP_ID = "TU_PROJECT_ID_AQUI"; 
+
+        // Variables Internas de la Aplicación
+        const firebaseConfig = MY_FIREBASE_CONFIG;
+        const appId = MY_APP_ID;
+        // =========================================================================
         
         let db;
         let auth;
@@ -60,6 +83,15 @@
         const dataCount = document.getElementById('data-count');
         const loadingMessage = document.getElementById('loading-message');
         const errorMessage = document.getElementById('error-message');
+        const configAlert = document.getElementById('config-alert');
+
+        let configPending = (appId === "TU_PROJECT_ID_AQUI");
+
+        if (configPending) {
+            configAlert.classList.remove('hidden');
+            authStatus.textContent = 'Configuración pendiente: No se intenta conectar a Firebase.';
+            throw new Error("Configuración de Firebase no insertada. Deteniendo ejecución.");
+        }
 
         try {
             // 1. Inicializar Firebase
@@ -71,13 +103,9 @@
             // 2. Proceso de Autenticación
             async function authenticate() {
                 try {
-                    if (initialAuthToken) {
-                        await signInWithCustomToken(auth, initialAuthToken);
-                        authStatus.textContent = 'Autenticado con token personalizado.';
-                    } else {
-                        await signInAnonymously(auth);
-                        authStatus.textContent = 'Autenticado anónimamente.';
-                    }
+                    // Usamos autenticación anónima para que el admin pueda acceder a los datos
+                    await signInAnonymously(auth);
+                    authStatus.textContent = 'Autenticado anónimamente para acceso de Admin.';
                 } catch (error) {
                     console.error("Error durante la autenticación:", error);
                     authStatus.textContent = `Error de Autenticación: ${error.message}`;
@@ -88,8 +116,12 @@
             onAuthStateChanged(auth, (user) => {
                 if (user) {
                     userId = user.uid;
-                    authStatus.textContent = `Conectado como Administrador. UID: ${userId}`;
-                    fetchMapData(userId);
+                    authStatus.textContent = `Conectado como Admin Anónimo. UID: ${userId}. Intentando cargar tus datos de Mapeo.`;
+                    
+                    // Nota: Si el usuario llenó la encuesta con otro UID, no verá los datos.
+                    // Para ver los datos de la encuesta, el Admin debe haber llenado la encuesta con este mismo UID.
+                    fetchMapData(userId); 
+
                 } else {
                     userId = null;
                     authStatus.textContent = 'Esperando Autenticación...';
@@ -103,13 +135,14 @@
                     return; // No se puede consultar sin DB o ID de usuario
                 }
                 
-                // Ruta donde se guardaron los datos del formulario Q1 (mapa_necesidades.html)
-                // Usamos la ruta privada /artifacts/{appId}/users/{userId}/map_data
+                // Ruta de la colección: /artifacts/{appId}/users/{userId}/map_data
+                // Si la persona que llenó el formulario es diferente al Admin actual, no se verá data
+                // debido a las reglas de seguridad. Asumimos que tú llenaste el formulario como Admin.
                 const mapCollectionPath = `artifacts/${appId}/users/${currentUserId}/map_data`;
                 const q = query(collection(db, mapCollectionPath));
 
                 // Escuchar cambios en tiempo real (onSnapshot)
-                onSnapshot(q, (snapshot) => {
+                const unsubscribe = onSnapshot(q, (snapshot) => {
                     const data = [];
                     snapshot.forEach((doc) => {
                         data.push({ id: doc.id, ...doc.data() });
@@ -120,7 +153,7 @@
                     dataCount.textContent = `${data.length} Registros`;
 
                     if (data.length === 0) {
-                        dataList.innerHTML = '<p class="text-gray-500">No hay registros de Mapeo todavía. ¡Llena el Q1 para verlos!</p>';
+                        dataList.innerHTML = '<p class="text-gray-500">No hay registros de Mapeo todavía. Los datos se buscan en tu ruta privada. ¡Llena el Q1 para verlos!</p>';
                         return;
                     }
 
@@ -137,10 +170,13 @@
                             <p class="font-bold text-lg text-indigo-700">Necesidad: <span class="font-normal text-gray-800">${item.need || 'N/A'}</span></p>
                             <p class="font-bold text-lg text-teal-700">Solución: <span class="font-normal text-gray-800">${item.solution || 'N/A'}</span></p>
                             <p class="text-md text-gray-700 mt-2">Barrio/Zona: <span class="font-medium">${item.location || 'N/A'}</span></p>
-                            <p class="text-xs text-gray-500 mt-1">Registro ID: ${item.id}</p>
+                            <p class="text-xs text-gray-500 mt-1">Usuario que llenó: ${item.authUserId || 'N/A'}</p>
+                            <p class="text-xs text-gray-500">Registro ID: ${item.id}</p>
                         `;
                         dataList.appendChild(div);
                     });
+                    
+                    return unsubscribe;
 
                 }, (error) => {
                     console.error("Error al obtener datos de Firestore:", error);
@@ -152,8 +188,11 @@
         } catch (error) {
             console.error("Error FATAL al iniciar la aplicación:", error);
             authStatus.textContent = `Error FATAL: ${error.message}`;
-            errorMessage.classList.remove('hidden');
-            errorMessage.textContent = 'No se pudo iniciar Firebase. Revisa la configuración.';
+            // Solo muestra el error si no es el de configuración pendiente
+            if (!configPending) {
+                errorMessage.classList.remove('hidden');
+                errorMessage.textContent = 'No se pudo iniciar Firebase. Revisa la configuración en el código.';
+            }
         }
 
     </script>
