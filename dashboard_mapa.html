@@ -1,208 +1,356 @@
-
-  apiKey: "AIzaSyAW1ghhULnHIgOI_mOnf0PFTEPpd0a2qdY",
-  authDomain: "veci-app-bb272.firebaseapp.com",
-  projectId: "veci-app-bb272",
-  storageBucket: "veci-app-bb272.firebasestorage.app",
-  messagingSenderId: "474388224286",
-  appId: "1:474388224286:web:a97258abda5b51f993d10f",
-  measurementId: "G-JGCZGP1KWM"
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Veci App | Panel de Administrador (Mapeo)</title>
+    <title>Veci App | Dashboard de Mapeo</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
-        .card { background-color: white; border-radius: 0.75rem; padding: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06); }
-        .config-warning { background-color: #fef2f2; border: 2px solid #ef4444; color: #b91c1c; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1.5rem; font-weight: 600; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .card {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+        }
+        .chart-container {
+            height: 300px; /* Altura fija para el gráfico */
+            width: 100%;
+        }
+        /* Estilo para los ejes de D3.js */
+        .axis path, .axis line {
+            fill: none;
+            stroke: #d1d5db;
+            shape-rendering: crispEdges;
+        }
+        .axis text {
+            font-size: 0.875rem;
+            fill: #6b7280;
+        }
+        .tooltip {
+            position: absolute;
+            text-align: center;
+            padding: 0.5rem;
+            background: #1f2937;
+            color: white;
+            border-radius: 0.375rem;
+            pointer-events: none;
+            font-size: 0.875rem;
+            z-index: 1000;
+        }
     </style>
 </head>
-<body class="p-4 sm:p-8">
+<body class="p-4 sm:p-6 lg:p-8">
+    <header class="mb-8">
+        <h1 class="text-4xl font-extrabold text-gray-900">Dashboard de Mapeo (Q1/Q2)</h1>
+        <p class="text-lg text-gray-600 mt-1">Análisis en tiempo real de las respuestas de la comunidad.</p>
+    </header>
 
-    <div class="max-w-6xl mx-auto">
-        <header class="text-center mb-8">
-            <h1 class="text-3xl sm:text-4xl font-extrabold text-indigo-800">Panel de Control Veci App</h1>
-            <p class="text-gray-600 mt-1">Datos recolectados del Mapeo de Necesidades (Q1)</p>
-        </header>
+    <div id="loading" class="text-center p-12 text-gray-500 text-xl">
+        Cargando datos y autenticando con Firebase...
+    </div>
 
-        <div id="config-alert" class="config-warning hidden">
-            <p class="text-xl">⚠️ ¡ATENCIÓN! CONFIGURACIÓN PENDIENTE ⚠️</p>
-            <p class="mt-2">El Panel no puede cargar datos porque **no se han insertado las claves de Firebase**. Por favor, edita este archivo e inserta tu configuración real de Firebase en la sección `MY_FIREBASE_CONFIG` y `MY_APP_ID`.</p>
-        </div>
-
-        <div class="card mb-8">
-            <h2 class="text-xl font-bold text-gray-800 mb-4">Estado de Conexión</h2>
-            <p id="auth-status" class="text-sm text-yellow-600">Inicializando... Por favor, espera.</p>
-        </div>
-
-        <div class="card">
-            <h2 class="text-xl font-bold text-gray-800 mb-4 flex justify-between items-center">
-                Registros de Mapeo
-                <span id="data-count" class="px-3 py-1 bg-indigo-100 text-indigo-800 text-sm font-semibold rounded-full">0 Registros</span>
-            </h2>
-            <div id="data-list" class="space-y-4">
-                <p class="text-gray-500" id="loading-message">Cargando datos. Asegúrate de haber llenado el formulario Q1.</p>
+    <div id="content" class="hidden">
+        
+        <!-- Métrica de Participación -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="card p-5 text-center bg-indigo-500 text-white">
+                <p class="text-sm font-medium opacity-80">Total de Respuestas (Q1 + Q2)</p>
+                <p id="total-responses" class="text-5xl font-extrabold mt-1">0</p>
             </div>
-            <p id="error-message" class="hidden mt-4 text-red-600 font-medium"></p>
+            <div class="card p-5 text-center bg-green-500 text-white">
+                <p class="text-sm font-medium opacity-80">Q1: Mapeo de Necesidades</p>
+                <p id="q1-responses" class="text-5xl font-extrabold mt-1">0</p>
+            </div>
+            <div class="card p-5 text-center bg-orange-500 text-white">
+                <p class="text-sm font-medium opacity-80">Q2: Votación Social</p>
+                <p id="q2-responses" class="text-5xl font-extrabold mt-1">0</p>
+            </div>
+        </div>
+
+        <!-- Gráfico de Q1: Top 5 Necesidades -->
+        <div class="card p-6 mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Q1: Top 5 Necesidades Prioritarias (Mapeo)</h2>
+            <p class="text-sm text-gray-500 mb-4">Frecuencia de las necesidades identificadas por la comunidad.</p>
+            <div class="chart-container">
+                <svg id="q1-chart"></svg>
+            </div>
+            <div id="q1-no-data" class="hidden text-center text-gray-400 py-10">Aún no hay datos para el Mapeo (Q1).</div>
+        </div>
+
+        <!-- Gráfico de Q2: Votos por Solución -->
+        <div class="card p-6 mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Q2: Resultado de la Votación Social</h2>
+            <p class="text-sm text-gray-500 mb-4">Distribución de votos para la solución piloto a implementar.</p>
+            <div class="chart-container">
+                <svg id="q2-chart"></svg>
+            </div>
+            <div id="q2-no-data" class="hidden text-center text-gray-400 py-10">Aún no hay datos para la Votación Social (Q2).</div>
+        </div>
+        
+        <!-- Información de Debug y User ID -->
+        <div class="card p-6 text-sm bg-gray-50 border-t border-gray-200">
+            <h3 class="font-semibold text-gray-700 mb-2">Estado del Sistema</h3>
+            <p><strong>App ID:</strong> <span id="app-id">Cargando...</span></p>
+            <p><strong>User ID (Debug):</strong> <span id="user-id">Cargando...</span></p>
+            <p class="text-red-500 mt-2">Recuerda: El dashboard no requiere que los datos sean privados, pero el `userId` se usa para fines de seguridad y trazabilidad. Los datos de Q1 y Q2 se leen desde colecciones públicas.</p>
         </div>
 
     </div>
 
+    <!-- Firebase y Lógica JS -->
     <script type="module">
+        // Importaciones de Firebase
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, query, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        
-        // Habilita el log de depuración (útil para Canvas y navegador)
-        setLogLevel('Debug');
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, query, onSnapshot, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // =========================================================================
-        // !!! ATENCIÓN: DEBES REEMPLAZAR ESTA SECCIÓN CON TUS VALORES REALES !!!
-        // Reemplaza esta configuración con la que obtuviste de tu consola de Firebase.
+        // Establecer nivel de log para depuración de Firestore
+        setLogLevel('debug');
         
-        // 1. Reemplaza este objeto con la configuración (firebaseConfig) de tu consola:
-        const MY_FIREBASE_CONFIG = {
-            apiKey: "TU_API_KEY_AQUI", // Ejemplo: "AIzaSy..."
-            authDomain: "TU_AUTH_DOMAIN_AQUI", // Ejemplo: "tu-proyecto.firebaseapp.com"
-            projectId: "TU_PROJECT_ID_AQUI", // Ejemplo: "tu-proyecto-id"
-            storageBucket: "TU_STORAGE_BUCKET_AQUI", // Ejemplo: "tu-proyecto.appspot.com"
-            messagingSenderId: "TU_MESSAGING_SENDER_ID_AQUI", // Ejemplo: "1234567890"
-            appId: "TU_APP_ID_AQUI" // Ejemplo: "1:1234567890:web:abcdefgh..."
+        // 1. CONFIGURACIÓN DE FIREBASE (¡AJUSTADA CON TUS VALORES!)
+        const firebaseConfig = {
+            apiKey: "AIzaSyAW1ghhULnHIgOI_mOnf0PFTEPpd0a2qdY",
+            authDomain: "veci-app-bb272.firebaseapp.com",
+            projectId: "veci-app-bb272",
+            storageBucket: "veci-app-bb272.firebasestorage.app",
+            messagingSenderId: "474388224286",
+            appId: "1:474388224286:web:d70e11cad595f33793d10f",
+            measurementId: "G-49ZSKY55HE"
         };
         
-        // 2. Define tu App ID (usa el projectId de Firebase si no tienes un App ID específico de Canvas)
-        const MY_APP_ID = "TU_PROJECT_ID_AQUI"; 
+        // Variables Globales del Entorno Canvas (si existen)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
-        // Variables Internas de la Aplicación
-        const firebaseConfig = MY_FIREBASE_CONFIG;
-        const appId = MY_APP_ID;
-        // =========================================================================
-        
-        let db;
-        let auth;
+        document.getElementById('app-id').textContent = appId;
+
+        // Inicializar Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
         let userId = null;
-
-        const authStatus = document.getElementById('auth-status');
-        const dataList = document.getElementById('data-list');
-        const dataCount = document.getElementById('data-count');
-        const loadingMessage = document.getElementById('loading-message');
-        const errorMessage = document.getElementById('error-message');
-        const configAlert = document.getElementById('config-alert');
-
-        let configPending = (appId === "TU_PROJECT_ID_AQUI");
-
-        if (configPending) {
-            configAlert.classList.remove('hidden');
-            authStatus.textContent = 'Configuración pendiente: No se intenta conectar a Firebase.';
-            throw new Error("Configuración de Firebase no insertada. Deteniendo ejecución.");
-        }
-
-        try {
-            // 1. Inicializar Firebase
-            const app = initializeApp(firebaseConfig);
-            db = getFirestore(app);
-            auth = getAuth(app);
-            authStatus.textContent = 'Firebase inicializado.';
-
-            // 2. Proceso de Autenticación
-            async function authenticate() {
+        let isAuthReady = false;
+        
+        // 2. AUTENTICACIÓN
+        onAuthStateChanged(auth, async (user) => {
+            if (!user) {
                 try {
-                    // Usamos autenticación anónima para que el admin pueda acceder a los datos
-                    await signInAnonymously(auth);
-                    authStatus.textContent = 'Autenticado anónimamente para acceso de Admin.';
+                    // Intento de autenticación con token personalizado o anónimo
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                        user = auth.currentUser; // Obtener el usuario después de la firma
+                    } else {
+                        // Si no hay token, inicia sesión anónimamente
+                        await signInAnonymously(auth);
+                        user = auth.currentUser;
+                    }
                 } catch (error) {
                     console.error("Error durante la autenticación:", error);
-                    authStatus.textContent = `Error de Autenticación: ${error.message}`;
+                    // Si falla la autenticación, seguimos sin datos de usuario, pero marcamos como lista la auth.
                 }
             }
+            
+            if (user) {
+                userId = user.uid;
+                document.getElementById('user-id').textContent = userId;
+                isAuthReady = true;
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('content').classList.remove('hidden');
+                console.log("Autenticación exitosa. User ID:", userId);
 
-            // 3. Listener de Estado de Autenticación
-            onAuthStateChanged(auth, (user) => {
-                if (user) {
-                    userId = user.uid;
-                    authStatus.textContent = `Conectado como Admin Anónimo. UID: ${userId}. Intentando cargar tus datos de Mapeo.`;
-                    
-                    // Nota: Si el usuario llenó la encuesta con otro UID, no verá los datos.
-                    // Para ver los datos de la encuesta, el Admin debe haber llenado la encuesta con este mismo UID.
-                    fetchMapData(userId); 
+                // Iniciar escucha de datos después de la autenticación
+                setupDataListeners();
+            } else {
+                 // Si no se pudo autenticar (incluso anónimamente), mostramos el dashboard vacío
+                document.getElementById('user-id').textContent = 'N/A (Anónimo Fallido)';
+                isAuthReady = true;
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('content').classList.remove('hidden');
+                console.warn("No se pudo obtener el usuario. Mostrando dashboard sin datos de usuario.");
+                setupDataListeners(); // Intentamos escuchar de todas formas
+            }
+        });
 
-                } else {
-                    userId = null;
-                    authStatus.textContent = 'Esperando Autenticación...';
-                    authenticate(); // Intentar autenticar si no hay usuario
-                }
+        // 3. LOGICA DEL DASHBOARD
+        
+        function setupDataListeners() {
+            // Colecciones públicas para el dashboard
+            const q1CollectionPath = `/artifacts/${appId}/public/data/q1_necesidades`;
+            const q2CollectionPath = `/artifacts/${appId}/public/data/q2_votacion`;
+
+            // Escuchador para Q1 (Mapeo de Necesidades)
+            onSnapshot(collection(db, q1CollectionPath), (snapshot) => {
+                const data = snapshot.docs.map(doc => doc.data());
+                document.getElementById('q1-responses').textContent = data.length;
+                updateTotalResponses();
+                processQ1Data(data);
+            }, (error) => {
+                console.error("Error al escuchar datos Q1:", error);
             });
 
-            // 4. Función para obtener datos de Mapeo
-            function fetchMapData(currentUserId) {
-                if (!db || !currentUserId) {
-                    return; // No se puede consultar sin DB o ID de usuario
-                }
-                
-                // Ruta de la colección: /artifacts/{appId}/users/{userId}/map_data
-                // Si la persona que llenó el formulario es diferente al Admin actual, no se verá data
-                // debido a las reglas de seguridad. Asumimos que tú llenaste el formulario como Admin.
-                const mapCollectionPath = `artifacts/${appId}/users/${currentUserId}/map_data`;
-                const q = query(collection(db, mapCollectionPath));
-
-                // Escuchar cambios en tiempo real (onSnapshot)
-                const unsubscribe = onSnapshot(q, (snapshot) => {
-                    const data = [];
-                    snapshot.forEach((doc) => {
-                        data.push({ id: doc.id, ...doc.data() });
-                    });
-
-                    loadingMessage.classList.add('hidden'); // Ocultar mensaje de carga
-                    dataList.innerHTML = ''; // Limpiar lista
-                    dataCount.textContent = `${data.length} Registros`;
-
-                    if (data.length === 0) {
-                        dataList.innerHTML = '<p class="text-gray-500">No hay registros de Mapeo todavía. Los datos se buscan en tu ruta privada. ¡Llena el Q1 para verlos!</p>';
-                        return;
-                    }
-
-                    // Renderizar los datos
-                    data.forEach((item, index) => {
-                        const div = document.createElement('div');
-                        div.className = 'card border-l-4 border-indigo-500 hover:shadow-lg transition duration-150';
-                        
-                        // Formatear las fechas si existen
-                        const timestamp = item.timestamp ? (item.timestamp.toDate ? item.timestamp.toDate().toLocaleString() : new Date(item.timestamp).toLocaleString()) : 'N/A';
-
-                        div.innerHTML = `
-                            <p class="text-sm text-gray-500 mb-2">Registro #${index + 1} (${timestamp})</p>
-                            <p class="font-bold text-lg text-indigo-700">Necesidad: <span class="font-normal text-gray-800">${item.need || 'N/A'}</span></p>
-                            <p class="font-bold text-lg text-teal-700">Solución: <span class="font-normal text-gray-800">${item.solution || 'N/A'}</span></p>
-                            <p class="text-md text-gray-700 mt-2">Barrio/Zona: <span class="font-medium">${item.location || 'N/A'}</span></p>
-                            <p class="text-xs text-gray-500 mt-1">Usuario que llenó: ${item.authUserId || 'N/A'}</p>
-                            <p class="text-xs text-gray-500">Registro ID: ${item.id}</p>
-                        `;
-                        dataList.appendChild(div);
-                    });
-                    
-                    return unsubscribe;
-
-                }, (error) => {
-                    console.error("Error al obtener datos de Firestore:", error);
-                    errorMessage.classList.remove('hidden');
-                    errorMessage.textContent = `Error de Base de Datos: ${error.message}. Asegúrate de que los permisos estén correctos.`;
-                });
-            }
-
-        } catch (error) {
-            console.error("Error FATAL al iniciar la aplicación:", error);
-            authStatus.textContent = `Error FATAL: ${error.message}`;
-            // Solo muestra el error si no es el de configuración pendiente
-            if (!configPending) {
-                errorMessage.classList.remove('hidden');
-                errorMessage.textContent = 'No se pudo iniciar Firebase. Revisa la configuración en el código.';
-            }
+            // Escuchador para Q2 (Votación Social)
+            onSnapshot(collection(db, q2CollectionPath), (snapshot) => {
+                const data = snapshot.docs.map(doc => doc.data());
+                document.getElementById('q2-responses').textContent = data.length;
+                updateTotalResponses();
+                processQ2Data(data);
+            }, (error) => {
+                console.error("Error al escuchar datos Q2:", error);
+            });
         }
 
+        function updateTotalResponses() {
+            const q1Count = parseInt(document.getElementById('q1-responses').textContent);
+            const q2Count = parseInt(document.getElementById('q2-responses').textContent);
+            document.getElementById('total-responses').textContent = q1Count + q2Count;
+        }
+
+        // 4. PROCESAMIENTO DE DATOS Y GRÁFICOS
+
+        function processQ1Data(data) {
+            if (data.length === 0) {
+                document.getElementById('q1-no-data').classList.remove('hidden');
+                document.getElementById('q1-chart').innerHTML = '';
+                return;
+            }
+            document.getElementById('q1-no-data').classList.add('hidden');
+
+            // Contar frecuencia de la necesidad principal (asumiendo que se llama 'necesidad_principal')
+            const counts = data.reduce((acc, doc) => {
+                const key = doc.necesidad_principal || 'No especificado';
+                acc[key] = (acc[key] || 0) + 1;
+                return acc;
+            }, {});
+
+            // Convertir a array, ordenar y tomar el top 5
+            let chartData = Object.keys(counts).map(key => ({
+                necesidad: key,
+                conteo: counts[key]
+            })).sort((a, b) => b.conteo - a.conteo).slice(0, 5);
+
+            drawBarChart('#q1-chart', chartData, 'necesidad', 'conteo', 'Q1');
+        }
+
+        function processQ2Data(data) {
+            if (data.length === 0) {
+                document.getElementById('q2-no-data').classList.remove('hidden');
+                document.getElementById('q2-chart').innerHTML = '';
+                return;
+            }
+            document.getElementById('q2-no-data').classList.add('hidden');
+
+            // Contar frecuencia de la opción votada (asumiendo que se llama 'opcion_votada')
+            const counts = data.reduce((acc, doc) => {
+                const key = doc.opcion_votada || 'No votada';
+                acc[key] = (acc[key] || 0) + 1;
+                return acc;
+            }, {});
+
+            // Convertir a array
+            let chartData = Object.keys(counts).map(key => ({
+                opcion: key,
+                votos: counts[key]
+            })).sort((a, b) => b.votos - a.votos);
+
+            drawBarChart('#q2-chart', chartData, 'opcion', 'votos', 'Q2');
+        }
+
+        // Función de D3.js para dibujar el gráfico de barras
+        function drawBarChart(selector, data, xKey, yKey, queryName) {
+            const container = d3.select(selector).node().parentNode;
+            const containerWidth = container.clientWidth;
+            const containerHeight = container.clientHeight;
+
+            const margin = { top: 20, right: 30, bottom: 80, left: 60 }; // Aumentar margen inferior para etiquetas largas
+            const width = containerWidth - margin.left - margin.right;
+            const height = containerHeight - margin.top - margin.bottom;
+
+            d3.select(selector).selectAll("*").remove(); // Limpiar gráfico anterior
+
+            const svg = d3.select(selector)
+                .attr("width", containerWidth)
+                .attr("height", containerHeight)
+                .append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+
+            // Escala X (Band Scale para categorías)
+            const x = d3.scaleBand()
+                .range([0, width])
+                .domain(data.map(d => d[xKey]))
+                .padding(0.2);
+
+            // Escala Y (Linear Scale para conteo)
+            const y = d3.scaleLinear()
+                .domain([0, d3.max(data, d => d[yKey])])
+                .range([height, 0]);
+
+            // Colores
+            const color = d3.scaleOrdinal(d3.schemeCategory10);
+
+            // Ejes
+            svg.append("g")
+                .attr("class", "axis x-axis")
+                .attr("transform", `translate(0,${height})`)
+                .call(d3.axisBottom(x))
+                .selectAll("text")
+                .attr("transform", "rotate(-45)")
+                .style("text-anchor", "end")
+                .attr("dx", "-.8em")
+                .attr("dy", ".15em")
+                .style("font-size", "12px"); // Ajustar tamaño de fuente
+
+            svg.append("g")
+                .attr("class", "axis y-axis")
+                .call(d3.axisLeft(y).ticks(Math.max(2, d3.max(data, d => d[yKey]) || 0)));
+
+            // Barras
+            const tooltip = d3.select("body").append("div")
+                .attr("class", "tooltip")
+                .style("opacity", 0);
+
+            svg.selectAll(".bar")
+                .data(data)
+                .enter().append("rect")
+                .attr("class", "bar")
+                .attr("x", d => x(d[xKey]))
+                .attr("y", d => y(d[yKey]))
+                .attr("width", x.bandwidth())
+                .attr("height", d => height - y(d[yKey]))
+                .attr("fill", (d, i) => color(i))
+                .on("mouseover", (event, d) => {
+                    tooltip.transition()
+                        .duration(200)
+                        .style("opacity", .9);
+                    tooltip.html(`<strong>${d[xKey]}</strong><br/>${queryName}: ${d[yKey]}`)
+                        .style("left", (event.pageX + 10) + "px")
+                        .style("top", (event.pageY - 28) + "px");
+                    d3.select(event.currentTarget).attr('fill', d3.rgb(color(data.indexOf(d))).darker(1.5));
+                })
+                .on("mouseout", (event, d) => {
+                    tooltip.transition()
+                        .duration(500)
+                        .style("opacity", 0);
+                    d3.select(event.currentTarget).attr('fill', color(data.indexOf(d)));
+                });
+
+            // Etiquetas de valor sobre las barras
+            svg.selectAll(".bar-label")
+                .data(data)
+                .enter().append("text")
+                .attr("class", "bar-label")
+                .attr("x", d => x(d[xKey]) + x.bandwidth() / 2)
+                .attr("y", d => y(d[yKey]) - 5)
+                .attr("text-anchor", "middle")
+                .text(d => d[yKey])
+                .style("font-size", "14px")
+                .style("fill", "#1f2937");
+        }
     </script>
 </body>
 </html>
