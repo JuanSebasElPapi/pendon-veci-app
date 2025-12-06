@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Veci App | Dashboard de Mapeo</title>
+    <title>Veci App | Dashboard de Mapeo y Participación</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
@@ -42,12 +42,16 @@
             font-size: 0.875rem;
             z-index: 1000;
         }
+        /* Nueva clase para el contador de Socios Pioneros */
+        .card-pioneer {
+            background-color: #3b82f6; /* Blue 500 */
+        }
     </style>
 </head>
 <body class="p-4 sm:p-6 lg:p-8">
     <header class="mb-8">
-        <h1 class="text-4xl font-extrabold text-gray-900">Dashboard de Mapeo (Q1/Q2)</h1>
-        <p class="text-lg text-gray-600 mt-1">Análisis en tiempo real de las respuestas de la comunidad.</p>
+        <h1 class="text-4xl font-extrabold text-gray-900">Dashboard de Participación Veci App</h1>
+        <p class="text-lg text-gray-600 mt-1">Monitoreo en tiempo real de Q1 (Mapeo), Q2 (Votación) y Q3 (Socios Pioneros).</p>
     </header>
 
     <div id="loading" class="text-center p-12 text-gray-500 text-xl">
@@ -56,10 +60,10 @@
 
     <div id="content" class="hidden">
         
-        <!-- Métrica de Participación -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <!-- Métrica de Participación (4 Columnas) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <div class="card p-5 text-center bg-indigo-500 text-white">
-                <p class="text-sm font-medium opacity-80">Total de Respuestas (Q1 + Q2)</p>
+                <p class="text-sm font-medium opacity-80">Total de Interacciones</p>
                 <p id="total-responses" class="text-5xl font-extrabold mt-1">0</p>
             </div>
             <div class="card p-5 text-center bg-green-500 text-white">
@@ -69,6 +73,11 @@
             <div class="card p-5 text-center bg-orange-500 text-white">
                 <p class="text-sm font-medium opacity-80">Q2: Votación Social</p>
                 <p id="q2-responses" class="text-5xl font-extrabold mt-1">0</p>
+            </div>
+            <!-- Nuevo Contador para Q3 -->
+            <div class="card p-5 text-center card-pioneer text-white">
+                <p class="text-sm font-medium opacity-80">Q3: Socios Pioneros Registrados</p>
+                <p id="q3-responses" class="text-5xl font-extrabold mt-1">0</p>
             </div>
         </div>
 
@@ -94,10 +103,9 @@
         
         <!-- Información de Debug y User ID -->
         <div class="card p-6 text-sm bg-gray-50 border-t border-gray-200">
-            <h3 class="font-semibold text-gray-700 mb-2">Estado del Sistema</h3>
+            <h3 class="font-semibold text-gray-700 mb-2">Estado del Sistema (Debug)</h3>
             <p><strong>App ID:</strong> <span id="app-id">Cargando...</span></p>
-            <p><strong>User ID (Debug):</strong> <span id="user-id">Cargando...</span></p>
-            <p class="text-red-500 mt-2">Recuerda: El dashboard no requiere que los datos sean privados, pero el `userId` se usa para fines de seguridad y trazabilidad. Los datos de Q1 y Q2 se leen desde colecciones públicas.</p>
+            <p><strong>User ID (Auth):</strong> <span id="user-id">Cargando...</span></p>
         </div>
 
     </div>
@@ -141,18 +149,15 @@
         onAuthStateChanged(auth, async (user) => {
             if (!user) {
                 try {
-                    // Intento de autenticación con token personalizado o anónimo
                     if (initialAuthToken) {
                         await signInWithCustomToken(auth, initialAuthToken);
-                        user = auth.currentUser; // Obtener el usuario después de la firma
+                        user = auth.currentUser;
                     } else {
-                        // Si no hay token, inicia sesión anónimamente
                         await signInAnonymously(auth);
                         user = auth.currentUser;
                     }
                 } catch (error) {
                     console.error("Error durante la autenticación:", error);
-                    // Si falla la autenticación, seguimos sin datos de usuario, pero marcamos como lista la auth.
                 }
             }
             
@@ -167,13 +172,11 @@
                 // Iniciar escucha de datos después de la autenticación
                 setupDataListeners();
             } else {
-                 // Si no se pudo autenticar (incluso anónimamente), mostramos el dashboard vacío
-                document.getElementById('user-id').textContent = 'N/A (Anónimo Fallido)';
+                document.getElementById('user-id').textContent = 'N/A (Error o Anónimo Fallido)';
                 isAuthReady = true;
                 document.getElementById('loading').classList.add('hidden');
                 document.getElementById('content').classList.remove('hidden');
-                console.warn("No se pudo obtener el usuario. Mostrando dashboard sin datos de usuario.");
-                setupDataListeners(); // Intentamos escuchar de todas formas
+                setupDataListeners();
             }
         });
 
@@ -183,6 +186,7 @@
             // Colecciones públicas para el dashboard
             const q1CollectionPath = `/artifacts/${appId}/public/data/q1_necesidades`;
             const q2CollectionPath = `/artifacts/${appId}/public/data/q2_votacion`;
+            const q3CollectionPath = `/artifacts/${appId}/public/data/q3_socios`; // Nuevo path
 
             // Escuchador para Q1 (Mapeo de Necesidades)
             onSnapshot(collection(db, q1CollectionPath), (snapshot) => {
@@ -203,15 +207,25 @@
             }, (error) => {
                 console.error("Error al escuchar datos Q2:", error);
             });
+            
+            // Nuevo Escuchador para Q3 (Socios Pioneros)
+            onSnapshot(collection(db, q3CollectionPath), (snapshot) => {
+                const data = snapshot.docs.map(doc => doc.data());
+                document.getElementById('q3-responses').textContent = data.length;
+                updateTotalResponses();
+            }, (error) => {
+                console.error("Error al escuchar datos Q3:", error);
+            });
         }
 
         function updateTotalResponses() {
-            const q1Count = parseInt(document.getElementById('q1-responses').textContent);
-            const q2Count = parseInt(document.getElementById('q2-responses').textContent);
-            document.getElementById('total-responses').textContent = q1Count + q2Count;
+            const q1Count = parseInt(document.getElementById('q1-responses').textContent || 0);
+            const q2Count = parseInt(document.getElementById('q2-responses').textContent || 0);
+            const q3Count = parseInt(document.getElementById('q3-responses').textContent || 0);
+            document.getElementById('total-responses').textContent = q1Count + q2Count + q3Count;
         }
 
-        // 4. PROCESAMIENTO DE DATOS Y GRÁFICOS
+        // 4. PROCESAMIENTO DE DATOS Y GRÁFICOS (Mismo código de D3)
 
         function processQ1Data(data) {
             if (data.length === 0) {
@@ -221,14 +235,12 @@
             }
             document.getElementById('q1-no-data').classList.add('hidden');
 
-            // Contar frecuencia de la necesidad principal (asumiendo que se llama 'necesidad_principal')
             const counts = data.reduce((acc, doc) => {
                 const key = doc.necesidad_principal || 'No especificado';
                 acc[key] = (acc[key] || 0) + 1;
                 return acc;
             }, {});
 
-            // Convertir a array, ordenar y tomar el top 5
             let chartData = Object.keys(counts).map(key => ({
                 necesidad: key,
                 conteo: counts[key]
@@ -245,14 +257,12 @@
             }
             document.getElementById('q2-no-data').classList.add('hidden');
 
-            // Contar frecuencia de la opción votada (asumiendo que se llama 'opcion_votada')
             const counts = data.reduce((acc, doc) => {
                 const key = doc.opcion_votada || 'No votada';
                 acc[key] = (acc[key] || 0) + 1;
                 return acc;
             }, {});
 
-            // Convertir a array
             let chartData = Object.keys(counts).map(key => ({
                 opcion: key,
                 votos: counts[key]
@@ -267,11 +277,11 @@
             const containerWidth = container.clientWidth;
             const containerHeight = container.clientHeight;
 
-            const margin = { top: 20, right: 30, bottom: 80, left: 60 }; // Aumentar margen inferior para etiquetas largas
+            const margin = { top: 20, right: 30, bottom: 80, left: 60 };
             const width = containerWidth - margin.left - margin.right;
             const height = containerHeight - margin.top - margin.bottom;
 
-            d3.select(selector).selectAll("*").remove(); // Limpiar gráfico anterior
+            d3.select(selector).selectAll("*").remove();
 
             const svg = d3.select(selector)
                 .attr("width", containerWidth)
@@ -279,18 +289,15 @@
                 .append("g")
                 .attr("transform", `translate(${margin.left},${margin.top})`);
 
-            // Escala X (Band Scale para categorías)
             const x = d3.scaleBand()
                 .range([0, width])
                 .domain(data.map(d => d[xKey]))
                 .padding(0.2);
 
-            // Escala Y (Linear Scale para conteo)
             const y = d3.scaleLinear()
                 .domain([0, d3.max(data, d => d[yKey])])
                 .range([height, 0]);
 
-            // Colores
             const color = d3.scaleOrdinal(d3.schemeCategory10);
 
             // Ejes
@@ -303,17 +310,18 @@
                 .style("text-anchor", "end")
                 .attr("dx", "-.8em")
                 .attr("dy", ".15em")
-                .style("font-size", "12px"); // Ajustar tamaño de fuente
+                .style("font-size", "12px");
 
             svg.append("g")
                 .attr("class", "axis y-axis")
                 .call(d3.axisLeft(y).ticks(Math.max(2, d3.max(data, d => d[yKey]) || 0)));
 
-            // Barras
+            // Tooltip setup
             const tooltip = d3.select("body").append("div")
                 .attr("class", "tooltip")
                 .style("opacity", 0);
 
+            // Barras
             svg.selectAll(".bar")
                 .data(data)
                 .enter().append("rect")
